@@ -1,0 +1,65 @@
+# Xcode
+DerivedData/
+build/
+*.xcworkspace
+!default.xcworkspace/contents.xcworkspacedata
+*.xccheckout
+*.xcuserstate
+*.xcscmblueprint
+
+# Xcode automatically generated files
+*.moved-aside
+*.xcuserdatad
+*.xcuserdatad/
+*.xccheckout
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+
+# Swift Package Manager
+.build/
+Package.resolved
+
+# Carthage (if still used)
+Carthage/Build/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Mac files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# iOS device logs
+*.crash
+*.log
+*.trace
+
+# Archives
+*.xcarchive
+*.ipa
+
+# User settings
+*.swp
+*~
+*.orig
+*.backup
+
+# Derived data from SwiftUI previews
+*.preview-thumbnails
+
+# JetBrains / AppCode
+.idea/
+*.iml
+
+# Optional: secrets
+*.xcconfig
+*.env
+
