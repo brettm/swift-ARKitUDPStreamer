@@ -9,35 +9,109 @@ import UIKit
 import ARKit
 import SceneKit
 import Network
+import OSCKitCore
+import Foundation
+import simd
 
-//IP Address of the Receiver on the local network
+// Local IP of the machine running OSC server here
+//
 let ip_host = "192.168.4.22"
-let port = 12345
+//
+// Ensure the OSC server is setup to listen on the correct port
+//
+let port: UInt16 = 12345
+//
+// Mirrors the transforms -X -> +X
+//
+let mirrored: Bool = false
+
+struct JointTransform {
+    var position: SIMD3<Float>
+    var rotation: simd_quatf
+    func display() {
+        print("Rot - \(rotation.vector)\nPos - \(position)\n")
+    }
+}
+
+struct BodyData {
+    var joints: [String: JointTransform]
+}
+
+protocol OSCAddressComposer {
+    func oscAddress(mirrored: Bool) -> String
+}
+
+enum Joint: String, CaseIterable, OSCAddressComposer {
+    case leftHand = "left_hand_joint"
+    case rightHand = "right_hand_joint"
+    case leftElbow = "left_forearm_joint"
+    case rightElbow = "right_forearm_joint"
+    case leftShoulder = "left_shoulder_joint"
+    case rightShoulder = "right_shoulder_joint"
+    var mirrored: Joint {
+        switch(self) {
+        case .leftHand: .rightHand
+        case .rightHand: .leftHand
+        case .leftElbow: .rightElbow
+        case .rightElbow: .leftElbow
+        case .leftShoulder: .rightShoulder
+        case .rightShoulder: .leftShoulder
+        }
+    }
+    func mirrored(_ mirrored: Bool) -> Joint {
+        return mirrored ? self.mirrored : self
+    }
+    static func joint(from name: String) -> Joint? {
+        for jointName in Self.allCases {
+            if name == jointName.rawValue { return jointName }
+        }
+        return nil
+    }
+    func oscAddress(mirrored: Bool) -> String {
+        let prefix = "/joint/"
+        let suffix = mirrored ? self.mirrored.rawValue : self.rawValue
+        return prefix + suffix
+    }
+}
 
 class ViewController: UIViewController, ARSCNViewDelegate {
     
     var arView: ARSCNView!
     var connection: NWConnection!
+    
+    var timer: Timer?
+    var time: Float = 0.0
+    
+    var restPose: ARSkeleton3D?
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        UIApplication.shared.isIdleTimerDisabled = true
         
         arView = ARSCNView(frame: view.bounds)
         arView.delegate = self
         arView.automaticallyUpdatesLighting = true
         view.addSubview(arView)
         
+        updateSkeletonRestInfo()
+        setupUDPConnection()
+        
         if ARBodyTrackingConfiguration.isSupported {
             let config = ARBodyTrackingConfiguration()
             arView.session.run(config)
+            sendMessage(OSCMessage("/arkit/status", values: ["Starting OSC server"]))
         } else {
             print("ARBodyTrackingConfiguration not supported on this device")
         }
-        
-        setupUDPConnection()
+    }
+    
+    private func updateSkeletonRestInfo() {
+        restPose = ARSkeletonDefinition.defaultBody3D.neutralBodySkeleton3D!
     }
 
     override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
         self.arView.frame = self.view.bounds
     }
     
@@ -74,43 +148,40 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         }
     }
     
-    // MARK: - ARSessionDelegate
-    func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
-        for anchor in anchors {
-            guard let bodyAnchor = anchor as? ARBodyAnchor else { continue }
-            sendBodyData(bodyAnchor)
+    func sendBodyData(_ bodyAnchor: ARBodyAnchor) {
+
+        for (jointIndex, modelTransform) in bodyAnchor.skeleton.jointModelTransforms.enumerated() {
+        
+            let name = ARSkeletonDefinition.defaultBody3D.jointNames[jointIndex]
+            guard let jointName = Joint.joint(from: name) else { continue }
+            
+            let restTransform = restPose!.jointModelTransforms[jointIndex]
+
+            let deltaRotationTransform = modelTransform * restTransform.inverse
+            let rotation = simd_quatf(deltaRotationTransform)
+            
+            let deltaPositionTransform = modelTransform - restTransform
+            let xPosition = mirrored ? -deltaPositionTransform.columns.3.x : deltaPositionTransform.columns.3.x
+            let position = SIMD3<Float>(xPosition,
+                                        deltaPositionTransform.columns.3.y,
+                                        deltaPositionTransform.columns.3.z)
+            
+            let body = JointTransform(position: position, rotation: rotation)
+            sendMessage(jointName.oscAddress(mirrored: mirrored), transform: body)
         }
     }
     
-    func sendBodyData(_ bodyAnchor: ARBodyAnchor) {
-        var jointDict: [String: [Float]] = [:]
-
-        for (jointIndex, transform) in bodyAnchor.skeleton.jointModelTransforms.enumerated() {
-            let name = ARSkeletonDefinition.defaultBody3D.jointNames[jointIndex]
-
-            let position = SIMD3<Float>(transform.columns.3.x,
-                                        transform.columns.3.y,
-                                        transform.columns.3.z)
-
-            let rotation = simd_quatf(transform)
-
-            jointDict[name] = [
-                position.x, position.y, position.z,
-                rotation.vector.x, rotation.vector.y, rotation.vector.z, rotation.vector.w
-            ]
-        }
-
-        // Wrap with timestamp
-        let packet: [String: Any] = [
-            "timestamp": Date().timeIntervalSince1970,
-            "joints": jointDict
+    func sendMessage(_ address: String, transform: JointTransform) {
+        let values = [
+            transform.position.x, transform.position.y, transform.position.z,
+            transform.rotation.vector.x, transform.rotation.vector.y, transform.rotation.vector.z, transform.rotation.vector.w
         ]
-
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: packet) else { return }
-        connection.send(content: jsonData, completion: .contentProcessed({ error in
-            if let error = error {
-                print("UDP send error:", error)
-            }
+        sendMessage(OSCMessage(address, values: values))
+    }
+    
+    func sendMessage(_ message: OSCMessage) {
+        try! connection.send(content: message.rawData(), completion: .contentProcessed({ error in
+            if let error = error { print("UDP send error:", error) }
         }))
     }
 }

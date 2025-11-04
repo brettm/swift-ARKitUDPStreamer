@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSSupportsSuddenTermination</key>
+	<false/>
+	<key></key>
+	<string></string>
+	<key>CFBundleIdentifier</key>
+	<string></string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -23,5 +29,11 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Required for AR Tracking</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app needs access to your local network to communicate with nearby devices.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_udp._local.</string>
+	</array>
 </dict>
 </plist>
