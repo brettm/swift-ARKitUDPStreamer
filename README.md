@@ -55,5 +55,4 @@ ARKitUDPStreamer uses ARKit's body tracking capabilities to capture skeletal joi
 
 ## Companion Project
 
-This app works in conjunction with the **Puppetry** Unreal Engine project for visualisation and the planned separate MIDI server for musical output.
-
+This app works in conjunction with the **Puppetry** Unreal Engine project for visualization and the planned separate MIDI server for musical output.
